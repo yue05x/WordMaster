@@ -1,0 +1,17 @@
+[
+    {"word": "apple", "definition": "苹果"},
+    {"word": "banana", "definition": "香蕉"},
+    {"word": "orange", "definition": "橙子"},
+    {"word": "grape", "definition": "葡萄"},
+    {"word": "watermelon", "definition": "西瓜"},
+    {"word": "strawberry", "definition": "草莓"},
+    {"word": "pineapple", "definition": "菠萝"},
+    {"word": "mango", "definition": "芒果"},
+    {"word": "peach", "definition": "桃子"},
+    {"word": "pear", "definition": "梨"},
+    {"word": "cherry", "definition": "樱桃"},
+    {"word": "lemon", "definition": "柠檬"},
+    {"word": "lime", "definition": "青柠"},
+    {"word": "coconut", "definition": "椰子"},
+    {"word": "kiwi", "definition": "猕猴桃"}
+]
