@@ -49,6 +49,12 @@ class WorkflowTest(unittest.TestCase):
         self.assertEqual(result.status_code, 200)
         cloud = self.client.get("/api/statistics/wordcloud?days=7", headers=self.headers(student_a))
         self.assertEqual(len(cloud.json["data"]), 10)
+        trend = self.client.get("/api/statistics/trend", headers=self.headers(student_a))
+        self.assertEqual(trend.status_code, 200)
+        self.assertEqual(len(trend.json["data"]), 1)
+        leaderboard = self.client.get("/api/statistics/leaderboard", headers=self.headers(student_a))
+        self.assertEqual(leaderboard.status_code, 200)
+        self.assertEqual(leaderboard.json["data"][0]["rank"], 1)
 
     def test_role_validation_and_login_identity(self):
         bad_teacher = self.client.post("/api/user/register", json={

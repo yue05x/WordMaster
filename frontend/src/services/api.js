@@ -31,5 +31,6 @@ export const wordApi = {
 }
 export const statisticApi = {
   overview: () => api.get('/statistics/overview'), wordcloud: (days = 7) => api.get(`/statistics/wordcloud?days=${days}`),
+  trend: () => api.get('/statistics/trend'), leaderboard: () => api.get('/statistics/leaderboard'),
 }
 export default api
