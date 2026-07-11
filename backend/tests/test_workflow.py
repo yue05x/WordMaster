@@ -6,6 +6,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app import create_app
+from services.grading import is_meaning_correct
 
 
 class WorkflowTest(unittest.TestCase):
@@ -108,6 +109,12 @@ class WorkflowTest(unittest.TestCase):
         })
         self.assertEqual(response.status_code, 400)
         self.assertIn("不能少于", response.json["message"])
+
+    def test_multiple_chinese_meanings_are_accepted(self):
+        self.assertTrue(is_meaning_correct("老师", "教师；老师；导师"))
+        self.assertTrue(is_meaning_correct("成功", "实现；达到；完成；成功"))
+        self.assertTrue(is_meaning_correct("橘子", "橙子；橘子；橙色"))
+        self.assertFalse(is_meaning_correct("英语", "学术的；学业的；学院的"))
 
 
 if __name__ == "__main__":

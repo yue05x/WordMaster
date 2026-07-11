@@ -1,18 +1,15 @@
 import random
-import re
 from datetime import datetime, timedelta
 
 from flask import Blueprint, g, jsonify, request
 from auth.decorators import login_required, teacher_required
 from models import AnswerRecord, Exam, ExamQuestion, ExamRecord, Word, db
+from services.grading import is_meaning_correct
 
 exam_bp = Blueprint("exam", __name__, url_prefix="/api/exams")
 
 def parse_time(value):
     return datetime.fromisoformat(value.replace("Z", "+00:00")).replace(tzinfo=None)
-
-def normalize(value):
-    return re.sub(r"\s+", " ", (value or "").strip().lower())
 
 def validate_exam_window(start_time, end_time, duration_minutes):
     if end_time <= start_time:
@@ -151,8 +148,7 @@ def submit_exam(attempt_id):
     correct = 0
     for order, question in enumerate(ordered, 1):
         user_answer = submitted[question.id]
-        accepted = [normalize(x) for x in re.split(r"[;；,，/]", question.word.meaning)]
-        is_correct = normalize(user_answer) in accepted
+        is_correct = is_meaning_correct(user_answer, question.word.meaning)
         correct += int(is_correct)
         db.session.add(AnswerRecord(attempt_id=attempt.id, exam_question_id=question.id,
             word_id=question.word_id, user_answer=user_answer, correct_answer=question.word.meaning,

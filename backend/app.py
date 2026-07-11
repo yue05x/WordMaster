@@ -6,7 +6,7 @@ from routes.exam import exam_bp
 from routes.statistics import statistics_bp
 from routes.user import user_bp
 from routes.words import words_bp
-from services.seed import seed_sample_words
+from services.seed import regrade_existing_answers, seed_sample_words
 
 def create_app(test_config=None):
     app = Flask(__name__)
@@ -27,6 +27,7 @@ def create_app(test_config=None):
     with app.app_context():
         db.create_all()
         seed_sample_words()
+        regrade_existing_answers()
     return app
 
 if __name__ == "__main__":
