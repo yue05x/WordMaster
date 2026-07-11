@@ -12,7 +12,7 @@ import WordManager from './pages/WordManager'
 
 const Guard = ({ children }) => <ProtectedRoute>{children}</ProtectedRoute>
 export default function App() {
-  return <ConfigProvider locale={zhCN}><AuthProvider><BrowserRouter><Routes>
+  return <ConfigProvider locale={zhCN} theme={{ token: { colorPrimary: '#1f4e79', borderRadius: 6, colorText: '#243142', fontFamily: 'Inter, Microsoft YaHei, sans-serif' } }}><AuthProvider><BrowserRouter><Routes>
     <Route path="/login" element={<Login />} />
     <Route path="/register" element={<Register />} />
     <Route path="/" element={<Guard><Home /></Guard>} />
