@@ -3,9 +3,12 @@ from flask_cors import CORS
 
 from config import Config
 from models import db
+from routes.exam import exam_bp
 from routes.paper import paper_bp
 from routes.user import user_bp
 from routes.words import words_bp
+from services.migrate import migrate_db
+from services.seed import seed_sample_words
 
 
 def create_app():
@@ -17,6 +20,7 @@ def create_app():
     app.register_blueprint(user_bp)
     app.register_blueprint(words_bp, url_prefix="/api")
     app.register_blueprint(paper_bp, url_prefix="/api")
+    app.register_blueprint(exam_bp)
 
     @app.route("/api/health")
     def health():
@@ -24,6 +28,8 @@ def create_app():
 
     with app.app_context():
         db.create_all()
+        migrate_db()
+        seed_sample_words()
 
     return app
 
