@@ -1,114 +1,119 @@
-from datetime import datetime
+import random
+import re
+from datetime import datetime, timedelta
 
-from flask import Blueprint, current_app, g, jsonify, request
+from flask import Blueprint, g, jsonify, request
+from auth.decorators import login_required, teacher_required
+from models import AnswerRecord, Exam, ExamQuestion, ExamRecord, Word, db
 
-from auth.decorators import login_required
-from models import ExamRecord, db
-from services.exam_service import generate_exam_questions, grade_exam
+exam_bp = Blueprint("exam", __name__, url_prefix="/api/exams")
 
-exam_bp = Blueprint("exam", __name__, url_prefix="/api/exam")
+def parse_time(value):
+    return datetime.fromisoformat(value.replace("Z", "+00:00")).replace(tzinfo=None)
 
+def normalize(value):
+    return re.sub(r"\s+", " ", (value or "").strip().lower())
 
-@exam_bp.route("/start", methods=["POST"])
+@exam_bp.get("")
 @login_required
-def start_exam():
+def list_exams():
+    return jsonify({"code": 200, "data": [e.to_dict() for e in Exam.query.order_by(Exam.start_time.desc()).all()]})
+
+@exam_bp.post("")
+@teacher_required
+def create_exam():
     data = request.get_json(silent=True) or {}
-    question_count = data.get("question_count")
-
-    if question_count is not None:
-        try:
-            question_count = int(question_count)
-            if question_count < 1 or question_count > 100:
-                return jsonify({"code": 400, "message": "题目数量应在1-100之间"}), 400
-        except (TypeError, ValueError):
-            return jsonify({"code": 400, "message": "题目数量格式无效"}), 400
-
     try:
-        exam, questions = generate_exam_questions(g.current_user.id, question_count)
-        db.session.commit()
-    except ValueError as e:
-        db.session.rollback()
-        return jsonify({"code": 400, "message": str(e)}), 400
-
-    duration_minutes = current_app.config["EXAM_DURATION_MINUTES"]
-    return jsonify(
-        {
-            "code": 200,
-            "message": "考试已开始",
-            "data": {
-                "exam_id": exam.id,
-                "total_questions": exam.total_questions,
-                "questions": questions,
-                "start_time": exam.start_time.isoformat() if exam.start_time else None,
-                "duration_minutes": duration_minutes,
-            },
-        }
-    )
-
-
-@exam_bp.route("/submit", methods=["POST"])
-@login_required
-def submit_exam():
-    data = request.get_json(silent=True) or {}
-    exam_id = data.get("exam_id")
-    answers = data.get("answers") or []
-
-    if not exam_id:
-        return jsonify({"code": 400, "message": "缺少考试ID"}), 400
-    if not answers:
-        return jsonify({"code": 400, "message": "请提交答案"}), 400
-
-    exam = ExamRecord.query.filter_by(id=exam_id, user_id=g.current_user.id).first()
-    if not exam:
-        return jsonify({"code": 404, "message": "考试记录不存在"}), 404
-    if exam.status == "submitted":
-        return jsonify({"code": 400, "message": "该考试已提交，不可重复提交"}), 400
-    if len(answers) != exam.total_questions:
-        return jsonify({"code": 400, "message": "答案数量与题目数量不匹配"}), 400
-
-    duration_minutes = current_app.config["EXAM_DURATION_MINUTES"]
-    if exam.start_time:
-        elapsed_seconds = (datetime.utcnow() - exam.start_time).total_seconds()
-        if elapsed_seconds > duration_minutes * 60 + 30:
-            return jsonify({"code": 400, "message": "考试已超时，请重新开始考试"}), 400
-
-    result = grade_exam(exam, answers)
+        title = (data.get("title") or "").strip()
+        count = int(data.get("question_count", 10))
+        start_time, end_time = parse_time(data["start_time"]), parse_time(data["end_time"])
+        duration = int(data.get("duration_minutes", 30))
+    except (KeyError, TypeError, ValueError):
+        return jsonify({"code": 400, "message": "考试参数格式错误"}), 400
+    words = Word.query.all()
+    if not title or count < 1 or end_time <= start_time or duration < 1:
+        return jsonify({"code": 400, "message": "考试名称、时间或题数无效"}), 400
+    if len(words) < count:
+        return jsonify({"code": 400, "message": f"单词库只有 {len(words)} 个单词"}), 400
+    exam = Exam(title=title, description=data.get("description", ""), creator_id=g.current_user.id,
+                start_time=start_time, end_time=end_time, duration_minutes=duration)
+    db.session.add(exam)
+    db.session.flush()
+    for index, word in enumerate(random.sample(words, count), 1):
+        db.session.add(ExamQuestion(exam_id=exam.id, word_id=word.id, question_type="en_to_cn", base_order=index))
     db.session.commit()
+    return jsonify({"code": 200, "message": "考试发布成功", "data": exam.to_dict(True)})
 
-    return jsonify(
-        {
-            "code": 200,
-            "message": "提交成功",
-            "data": {
-                "exam_id": exam.id,
-                "correct_count": result["correct_count"],
-                "total_questions": result["total_questions"],
-                "score": result["score"],
-                "start_time": result["start_time"],
-                "end_time": result["end_time"],
-                "duration_seconds": result["duration_seconds"],
-                "answers": result["answers"],
-            },
-        }
-    )
-
-
-@exam_bp.route("/records", methods=["GET"])
+@exam_bp.post("/<int:exam_id>/start")
 @login_required
-def get_exam_records():
-    records = (
-        ExamRecord.query.filter_by(user_id=g.current_user.id, status="submitted")
-        .order_by(ExamRecord.end_time.desc())
-        .all()
-    )
-    return jsonify({"code": 200, "data": [r.to_dict() for r in records]})
-
-
-@exam_bp.route("/<int:exam_id>", methods=["GET"])
-@login_required
-def get_exam_detail(exam_id):
-    exam = ExamRecord.query.filter_by(id=exam_id, user_id=g.current_user.id).first()
+def start_exam(exam_id):
+    exam = db.session.get(Exam, exam_id)
     if not exam:
-        return jsonify({"code": 404, "message": "考试记录不存在"}), 404
+        return jsonify({"code": 404, "message": "考试不存在"}), 404
+    if exam.effective_status() != "running":
+        return jsonify({"code": 400, "message": "考试尚未开始或已经结束"}), 400
+    attempt = ExamRecord.query.filter_by(exam_id=exam.id, user_id=g.current_user.id).first()
+    if attempt and attempt.status == "submitted":
+        return jsonify({"code": 400, "message": "你已经提交过本场考试"}), 400
+    if not attempt:
+        attempt = ExamRecord(exam_id=exam.id, user_id=g.current_user.id, total_questions=len(exam.questions))
+        db.session.add(attempt)
+        db.session.commit()
+    questions = list(exam.questions)
+    random.Random(f"{exam.id}:{g.current_user.id}").shuffle(questions)
+    payload = [{"question_id": q.id, "order": order, "prompt": q.word.word,
+                "phonetic": q.word.phonetic, "question_type": q.question_type}
+               for order, q in enumerate(questions, 1)]
+    deadline = min(exam.end_time, attempt.start_time + timedelta(minutes=exam.duration_minutes))
+    return jsonify({"code": 200, "data": {"attempt_id": attempt.id, "exam": exam.to_dict(),
+                    "deadline": deadline.isoformat(), "questions": payload}})
 
-    return jsonify({"code": 200, "data": exam.to_dict(include_answers=True)})
+@exam_bp.post("/attempts/<int:attempt_id>/submit")
+@login_required
+def submit_exam(attempt_id):
+    attempt = ExamRecord.query.filter_by(id=attempt_id, user_id=g.current_user.id).first()
+    if not attempt:
+        return jsonify({"code": 404, "message": "答题记录不存在"}), 404
+    if attempt.status == "submitted":
+        return jsonify({"code": 400, "message": "试卷不可重复提交"}), 400
+    deadline = min(attempt.exam.end_time, attempt.start_time + timedelta(minutes=attempt.exam.duration_minutes))
+    if datetime.utcnow() > deadline + timedelta(seconds=30):
+        return jsonify({"code": 400, "message": "考试已超时"}), 400
+    try:
+        submitted = {int(a["question_id"]): a.get("answer", "") for a in (request.json or {}).get("answers", [])}
+    except (KeyError, TypeError, ValueError):
+        return jsonify({"code": 400, "message": "答案格式错误"}), 400
+    questions = {q.id: q for q in attempt.exam.questions}
+    if set(submitted) != set(questions):
+        return jsonify({"code": 400, "message": "提交题目与本场试卷不一致"}), 400
+    ordered = list(attempt.exam.questions)
+    random.Random(f"{attempt.exam_id}:{g.current_user.id}").shuffle(ordered)
+    correct = 0
+    for order, question in enumerate(ordered, 1):
+        user_answer = submitted[question.id]
+        accepted = [normalize(x) for x in re.split(r"[;；,，/]", question.word.meaning)]
+        is_correct = normalize(user_answer) in accepted
+        correct += int(is_correct)
+        db.session.add(AnswerRecord(attempt_id=attempt.id, exam_question_id=question.id,
+            word_id=question.word_id, user_answer=user_answer, correct_answer=question.word.meaning,
+            question_type=question.question_type, is_correct=is_correct, question_order=order))
+    attempt.correct_count, attempt.score = correct, round(correct / attempt.total_questions * 100, 2)
+    attempt.status, attempt.end_time = "submitted", datetime.utcnow()
+    db.session.commit()
+    return jsonify({"code": 200, "message": "交卷成功", "data": attempt.to_dict(True)})
+
+@exam_bp.get("/records")
+@login_required
+def records():
+    query = ExamRecord.query.filter_by(status="submitted")
+    if g.current_user.role != "teacher":
+        query = query.filter_by(user_id=g.current_user.id)
+    return jsonify({"code": 200, "data": [r.to_dict() for r in query.order_by(ExamRecord.end_time.desc()).all()]})
+
+@exam_bp.get("/records/<int:record_id>")
+@login_required
+def record_detail(record_id):
+    row = db.session.get(ExamRecord, record_id)
+    if not row or (g.current_user.role != "teacher" and row.user_id != g.current_user.id):
+        return jsonify({"code": 404, "message": "成绩不存在"}), 404
+    return jsonify({"code": 200, "data": row.to_dict(True)})

@@ -20,18 +20,23 @@ def login_required(f):
     def decorated(*args, **kwargs):
         auth_header = request.headers.get("Authorization", "")
         if not auth_header.startswith("Bearer "):
-            return jsonify({"code": 401, "message": "未登录或令牌无效"}), 401
-
-        token = auth_header[7:]
-        payload = decode_token(token)
+            return jsonify({"code": 401, "message": "请先登录"}), 401
+        payload = decode_token(auth_header[7:])
         if not payload:
             return jsonify({"code": 401, "message": "登录已过期，请重新登录"}), 401
-
         user = db.session.get(User, payload["user_id"])
         if not user or user.status != 1:
             return jsonify({"code": 401, "message": "用户不存在或已被禁用"}), 401
-
         g.current_user = user
         return f(*args, **kwargs)
+    return decorated
 
+
+def teacher_required(f):
+    @login_required
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if g.current_user.role != "teacher":
+            return jsonify({"code": 403, "message": "仅教师可以执行此操作"}), 403
+        return f(*args, **kwargs)
     return decorated

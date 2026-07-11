@@ -9,7 +9,7 @@ class Word(db.Model):
     __tablename__ = "word"
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    word = db.Column(db.String(100), nullable=False)
+    word = db.Column(db.String(100), nullable=False, unique=True)
     meaning = db.Column(db.String(500), nullable=False)
     phonetic = db.Column(db.String(100))
     level = db.Column(db.String(20))
@@ -19,6 +19,15 @@ class Word(db.Model):
         return {
             "word_id": self.id,
             "word": self.word,
+            "phonetic": self.phonetic,
+            "level": self.level,
+        }
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "word": self.word,
+            "meaning": self.meaning,
             "phonetic": self.phonetic,
             "level": self.level,
         }
