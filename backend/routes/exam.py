@@ -14,6 +14,13 @@ def parse_time(value):
 def normalize(value):
     return re.sub(r"\s+", " ", (value or "").strip().lower())
 
+def validate_exam_window(start_time, end_time, duration_minutes):
+    if end_time <= start_time:
+        return "结束时间必须晚于开始时间"
+    if end_time - start_time < timedelta(minutes=duration_minutes):
+        return f"考试开放时间不能少于个人限时 {duration_minutes} 分钟"
+    return None
+
 @exam_bp.get("")
 @login_required
 def list_exams():
@@ -39,8 +46,11 @@ def create_exam():
     except (KeyError, TypeError, ValueError):
         return jsonify({"code": 400, "message": "考试参数格式错误"}), 400
     words = Word.query.all()
-    if not title or count < 1 or end_time <= start_time or duration < 1:
+    if not title or count < 1 or duration < 1:
         return jsonify({"code": 400, "message": "考试名称、时间或题数无效"}), 400
+    window_error = validate_exam_window(start_time, end_time, duration)
+    if window_error:
+        return jsonify({"code": 400, "message": window_error}), 400
     if len(words) < count:
         return jsonify({"code": 400, "message": f"单词库只有 {len(words)} 个单词"}), 400
     exam = Exam(title=title, description=data.get("description", ""), creator_id=g.current_user.id,
@@ -72,8 +82,11 @@ def update_exam(exam_id):
         return jsonify({"code": 400, "message": "考试参数格式错误"}), 400
     exam.title = (data.get("title") or exam.title).strip()
     exam.description = data.get("description", exam.description)
-    if not exam.title or exam.end_time <= exam.start_time or exam.duration_minutes < 1:
+    if not exam.title or exam.duration_minutes < 1:
         return jsonify({"code": 400, "message": "考试名称或时间无效"}), 400
+    window_error = validate_exam_window(exam.start_time, exam.end_time, exam.duration_minutes)
+    if window_error:
+        return jsonify({"code": 400, "message": window_error}), 400
     db.session.commit()
     return jsonify({"code": 200, "message": "考试修改成功", "data": exam.to_dict(True)})
 

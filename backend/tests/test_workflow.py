@@ -98,6 +98,17 @@ class WorkflowTest(unittest.TestCase):
         removed = self.client.delete(f"/api/exams/{exam_id}", headers=headers)
         self.assertEqual(removed.status_code, 200)
 
+    def test_exam_window_must_cover_duration(self):
+        teacher = self.register("time_teacher", "teacher")
+        now = datetime.utcnow()
+        response = self.client.post("/api/exams", headers=self.headers(teacher), json={
+            "title": "错误时间考试", "question_count": 5, "duration_minutes": 30,
+            "start_time": now.isoformat(),
+            "end_time": (now + timedelta(seconds=10)).isoformat(),
+        })
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("不能少于", response.json["message"])
+
 
 if __name__ == "__main__":
     unittest.main()

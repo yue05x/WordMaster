@@ -23,6 +23,11 @@ export default function Home() {
     setOpen(true)
   }
   const saveExam = async (values) => {
+    const windowMinutes = values.time[1].diff(values.time[0], 'minute', true)
+    if (windowMinutes < values.duration_minutes) {
+      message.error(`考试开放时间不能少于个人限时 ${values.duration_minutes} 分钟`)
+      return
+    }
     const payload = { ...values, start_time: values.time[0].toISOString(), end_time: values.time[1].toISOString() }
     delete payload.time
     try { editing ? await examApi.update(editing.id, payload) : await examApi.create(payload); message.success(editing ? '考试修改成功' : '考试发布成功'); setOpen(false); form.resetFields(); load() } catch (e) { message.error(e.message) }
@@ -36,6 +41,6 @@ export default function Home() {
       {!exams.length && <Typography.Text type="secondary">目前还没有考试。{user?.role === 'teacher' ? '请点击右上角发布考试。' : '请等待教师发布。'}</Typography.Text>}
       <Row gutter={[16, 16]}>{exams.map((exam) => <Col xs={24} md={12} key={exam.id}><Card size="small" title={exam.title} extra={<Tag color={exam.status === 'running' ? 'green' : 'default'}>{statusText[exam.status]}</Tag>}><p>{exam.question_count} 题 · {exam.duration_minutes} 分钟</p><p>{new Date(exam.start_time).toLocaleString()} 至 {new Date(exam.end_time).toLocaleString()}</p>{user?.role === 'student' ? <Button type="primary" disabled={exam.status !== 'running'} onClick={() => navigate(`/exam/${exam.id}`)}>进入考试</Button> : <Space><Button disabled={exam.status === 'finished'} onClick={() => showExamForm(exam)}>编辑</Button><Popconfirm title="确认删除这场考试？" onConfirm={() => removeExam(exam.id)}><Button danger>删除</Button></Popconfirm></Space>}</Card></Col>)}</Row>
     </Card></main>
-    <Modal title={editing ? '编辑考试' : '发布考试'} open={open} onCancel={() => setOpen(false)} footer={null}><Form form={form} layout="vertical" onFinish={saveExam}><Form.Item label="考试名称" name="title" rules={[{ required: true }]}><Input /></Form.Item><Form.Item label="考试说明" name="description"><Input.TextArea /></Form.Item><Form.Item label="起止时间" name="time" rules={[{ required: true }]}><DatePicker.RangePicker showTime /></Form.Item>{!editing && <Form.Item label="题目数量" name="question_count" rules={[{ required: true }]}><InputNumber min={1} max={100} /></Form.Item>}<Form.Item label="限时（分钟）" name="duration_minutes" rules={[{ required: true }]}><InputNumber min={1} /></Form.Item><Button type="primary" htmlType="submit" block>{editing ? '保存修改' : '发布并固定题目'}</Button></Form></Modal>
+    <Modal title={editing ? '编辑考试' : '发布考试'} open={open} onCancel={() => setOpen(false)} footer={null}><Form form={form} layout="vertical" onFinish={saveExam}><Form.Item label="考试名称" name="title" rules={[{ required: true }]}><Input /></Form.Item><Form.Item label="考试说明" name="description"><Input.TextArea /></Form.Item><Form.Item label="起止时间（开放窗口应不少于考试限时）" name="time" rules={[{ required: true }]}><DatePicker.RangePicker showTime={{ format: 'HH:mm' }} format="YYYY-MM-DD HH:mm" /></Form.Item>{!editing && <Form.Item label="题目数量" name="question_count" rules={[{ required: true }]}><InputNumber min={1} max={100} /></Form.Item>}<Form.Item label="个人考试限时（分钟）" name="duration_minutes" rules={[{ required: true }]}><InputNumber min={1} /></Form.Item><Button type="primary" htmlType="submit" block>{editing ? '保存修改' : '发布并固定题目'}</Button></Form></Modal>
   </Layout>
 }
