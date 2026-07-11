@@ -49,6 +49,55 @@ class WorkflowTest(unittest.TestCase):
         cloud = self.client.get("/api/statistics/wordcloud?days=7", headers=self.headers(student_a))
         self.assertEqual(len(cloud.json["data"]), 10)
 
+    def test_role_validation_and_login_identity(self):
+        bad_teacher = self.client.post("/api/user/register", json={
+            "username": "bad_teacher", "password": "123456",
+            "role": "teacher", "teacher_code": "wrong-code",
+        })
+        self.assertEqual(bad_teacher.status_code, 400)
+        self.assertIn("邀请码", bad_teacher.json["message"])
+
+        self.register("real_teacher", "teacher")
+        wrong_role = self.client.post("/api/user/login", json={
+            "username": "real_teacher", "password": "123456", "role": "student",
+        })
+        self.assertEqual(wrong_role.status_code, 403)
+        correct_role = self.client.post("/api/user/login", json={
+            "username": "real_teacher", "password": "123456", "role": "teacher",
+        })
+        self.assertEqual(correct_role.status_code, 200)
+        self.assertEqual(correct_role.json["data"]["user"]["role"], "teacher")
+
+    def test_teacher_word_and_exam_management(self):
+        teacher = self.register("manager", "teacher")
+        headers = self.headers(teacher)
+        created = self.client.post("/api/words", headers=headers, json={
+            "word": "codex", "meaning": "代码助手", "level": "拓展",
+        })
+        self.assertEqual(created.status_code, 200)
+        word_id = created.json["data"]["id"]
+        updated = self.client.put(f"/api/words/{word_id}", headers=headers, json={
+            "word": "codex", "meaning": "智能代码助手", "level": "拓展",
+        })
+        self.assertEqual(updated.json["data"]["meaning"], "智能代码助手")
+        deleted = self.client.delete(f"/api/words/{word_id}", headers=headers)
+        self.assertEqual(deleted.status_code, 200)
+
+        now = datetime.utcnow()
+        exam = self.client.post("/api/exams", headers=headers, json={
+            "title": "可编辑测试", "question_count": 5, "duration_minutes": 20,
+            "start_time": (now + timedelta(hours=1)).isoformat(),
+            "end_time": (now + timedelta(hours=2)).isoformat(),
+        })
+        self.assertEqual(exam.status_code, 200)
+        exam_id = exam.json["data"]["id"]
+        changed = self.client.put(f"/api/exams/{exam_id}", headers=headers, json={
+            "title": "修改后的考试", "duration_minutes": 25,
+        })
+        self.assertEqual(changed.json["data"]["title"], "修改后的考试")
+        removed = self.client.delete(f"/api/exams/{exam_id}", headers=headers)
+        self.assertEqual(removed.status_code, 200)
+
 
 if __name__ == "__main__":
     unittest.main()

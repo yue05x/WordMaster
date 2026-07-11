@@ -42,8 +42,8 @@ class ExamRecord(db.Model):
             "correct_count": self.correct_count,
             "score": float(self.score or 0),
             "status": self.status,
-            "start_time": self.start_time.isoformat() if self.start_time else None,
-            "end_time": self.end_time.isoformat() if self.end_time else None,
+            "start_time": self.start_time.isoformat() + "Z" if self.start_time else None,
+            "end_time": self.end_time.isoformat() + "Z" if self.end_time else None,
             "duration_seconds": self.duration_seconds(),
         }
         if include_answers:

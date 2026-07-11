@@ -8,6 +8,7 @@ import Login from './pages/Login'
 import Register from './pages/Register'
 import Exam from './pages/Exam'
 import ExamHistory from './pages/ExamHistory'
+import WordManager from './pages/WordManager'
 
 const Guard = ({ children }) => <ProtectedRoute>{children}</ProtectedRoute>
 export default function App() {
@@ -17,6 +18,7 @@ export default function App() {
     <Route path="/" element={<Guard><Home /></Guard>} />
     <Route path="/exam/:examId" element={<Guard><Exam /></Guard>} />
     <Route path="/history" element={<Guard><ExamHistory /></Guard>} />
+    <Route path="/words" element={<Guard><WordManager /></Guard>} />
     <Route path="*" element={<Navigate to="/" replace />} />
   </Routes></BrowserRouter></AuthProvider></ConfigProvider>
 }

@@ -17,9 +17,17 @@ export const userApi = {
 }
 export const examApi = {
   list: () => api.get('/exams'), create: (data) => api.post('/exams', data),
+  get: (id) => api.get(`/exams/${id}`), update: (id, data) => api.put(`/exams/${id}`, data),
+  remove: (id) => api.delete(`/exams/${id}`),
   start: (id) => api.post(`/exams/${id}/start`),
   submit: (attemptId, answers) => api.post(`/exams/attempts/${attemptId}/submit`, { answers }),
   records: () => api.get('/exams/records'), detail: (id) => api.get(`/exams/records/${id}`),
+}
+export const wordApi = {
+  list: (q = '') => api.get(`/words?q=${encodeURIComponent(q)}`),
+  create: (data) => api.post('/words', data),
+  update: (id, data) => api.put(`/words/${id}`, data),
+  remove: (id) => api.delete(`/words/${id}`),
 }
 export const statisticApi = {
   overview: () => api.get('/statistics/overview'), wordcloud: (days = 7) => api.get(`/statistics/wordcloud?days=${days}`),

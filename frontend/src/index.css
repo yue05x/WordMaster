@@ -13,5 +13,6 @@ body { margin: 0; font-family: Inter, "Microsoft YaHei", sans-serif; background:
 .word-cloud span:nth-child(3n) { color: #c2410c; }
 .word-cloud span:nth-child(3n+1) { color: #4338ca; }
 .question-card { margin: 16px 0; border-left: 4px solid #1677ff; }
+.toolbar { display: flex; justify-content: space-between; width: 100%; margin-bottom: 16px; }
 small { color: #64748b; font-weight: normal; }
 @media (max-width: 720px) { .topbar { align-items: flex-start; flex-direction: column; } }

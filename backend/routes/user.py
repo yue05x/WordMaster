@@ -16,7 +16,11 @@ def register():
         return jsonify({"code": 400, "message": "用户名至少3位，密码至少6位"}), 400
     if User.query.filter_by(username=username).first():
         return jsonify({"code": 400, "message": "用户名已存在"}), 400
-    role = "teacher" if data.get("role") == "teacher" and data.get("teacher_code") == current_app.config["TEACHER_CODE"] else "student"
+    role = data.get("role", "student")
+    if role not in {"student", "teacher"}:
+        return jsonify({"code": 400, "message": "请选择正确的注册身份"}), 400
+    if role == "teacher" and data.get("teacher_code") != current_app.config["TEACHER_CODE"]:
+        return jsonify({"code": 400, "message": "教师邀请码错误"}), 400
     user = User(username=username, password=hash_password(password),
                 nickname=(data.get("nickname") or username).strip(),
                 email=(data.get("email") or "").strip() or None, role=role)
@@ -29,9 +33,14 @@ def register():
 @user_bp.post("/login")
 def login():
     data = request.get_json(silent=True) or {}
+    role = data.get("role")
+    if role not in {"student", "teacher"}:
+        return jsonify({"code": 400, "message": "请选择登录身份"}), 400
     user = User.query.filter_by(username=(data.get("username") or "").strip()).first()
     if not user or not verify_password(data.get("password") or "", user.password):
         return jsonify({"code": 401, "message": "用户名或密码错误"}), 401
+    if user.role != role:
+        return jsonify({"code": 403, "message": f"该账号不是{'教师' if role == 'teacher' else '学生'}账号"}), 403
     return jsonify({"code": 200, "message": "登录成功", "data": {
         "token": create_token(user.id, user.username), "user": user.to_dict()}})
 

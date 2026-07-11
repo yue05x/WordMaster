@@ -19,6 +19,14 @@ def normalize(value):
 def list_exams():
     return jsonify({"code": 200, "data": [e.to_dict() for e in Exam.query.order_by(Exam.start_time.desc()).all()]})
 
+@exam_bp.get("/<int:exam_id>")
+@login_required
+def exam_detail(exam_id):
+    exam = db.session.get(Exam, exam_id)
+    if not exam:
+        return jsonify({"code": 404, "message": "考试不存在"}), 404
+    return jsonify({"code": 200, "data": exam.to_dict(g.current_user.role == "teacher")})
+
 @exam_bp.post("")
 @teacher_required
 def create_exam():
@@ -44,9 +52,48 @@ def create_exam():
     db.session.commit()
     return jsonify({"code": 200, "message": "考试发布成功", "data": exam.to_dict(True)})
 
+@exam_bp.put("/<int:exam_id>")
+@teacher_required
+def update_exam(exam_id):
+    exam = db.session.get(Exam, exam_id)
+    if not exam:
+        return jsonify({"code": 404, "message": "考试不存在"}), 404
+    if exam.attempts.count():
+        return jsonify({"code": 400, "message": "已有学生进入考试，不能修改"}), 400
+    data = request.get_json(silent=True) or {}
+    try:
+        if "start_time" in data:
+            exam.start_time = parse_time(data["start_time"])
+        if "end_time" in data:
+            exam.end_time = parse_time(data["end_time"])
+        if "duration_minutes" in data:
+            exam.duration_minutes = int(data["duration_minutes"])
+    except (TypeError, ValueError):
+        return jsonify({"code": 400, "message": "考试参数格式错误"}), 400
+    exam.title = (data.get("title") or exam.title).strip()
+    exam.description = data.get("description", exam.description)
+    if not exam.title or exam.end_time <= exam.start_time or exam.duration_minutes < 1:
+        return jsonify({"code": 400, "message": "考试名称或时间无效"}), 400
+    db.session.commit()
+    return jsonify({"code": 200, "message": "考试修改成功", "data": exam.to_dict(True)})
+
+@exam_bp.delete("/<int:exam_id>")
+@teacher_required
+def delete_exam(exam_id):
+    exam = db.session.get(Exam, exam_id)
+    if not exam:
+        return jsonify({"code": 404, "message": "考试不存在"}), 404
+    if exam.attempts.count():
+        return jsonify({"code": 400, "message": "考试已有答题记录，不能删除"}), 400
+    db.session.delete(exam)
+    db.session.commit()
+    return jsonify({"code": 200, "message": "考试删除成功"})
+
 @exam_bp.post("/<int:exam_id>/start")
 @login_required
 def start_exam(exam_id):
+    if g.current_user.role != "student":
+        return jsonify({"code": 403, "message": "教师账号不能参加考试"}), 403
     exam = db.session.get(Exam, exam_id)
     if not exam:
         return jsonify({"code": 404, "message": "考试不存在"}), 404
@@ -66,7 +113,7 @@ def start_exam(exam_id):
                for order, q in enumerate(questions, 1)]
     deadline = min(exam.end_time, attempt.start_time + timedelta(minutes=exam.duration_minutes))
     return jsonify({"code": 200, "data": {"attempt_id": attempt.id, "exam": exam.to_dict(),
-                    "deadline": deadline.isoformat(), "questions": payload}})
+                    "deadline": deadline.isoformat() + "Z", "questions": payload}})
 
 @exam_bp.post("/attempts/<int:attempt_id>/submit")
 @login_required
